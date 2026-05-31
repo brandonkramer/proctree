@@ -42,7 +42,8 @@ func longRunningSpec() Spec {
 	if runtime.GOOS == "windows" {
 		return Spec{Shell: "ping -n 600 127.0.0.1"}
 	}
-	return Spec{Shell: "sleep 300"}
+	// Keep the shell parent alive; macOS /bin/sh may exec simple `-c sleep …`.
+	return Spec{Shell: "sleep 300 & wait"}
 }
 
 func exitSpec(code int) Spec {

@@ -18,7 +18,10 @@ func cmdlineMatchesSpec(parts []string, spec *Spec) bool {
 		return len(parts) == 1+len(spec.Args)
 	}
 	payload := shellPayloadFromParts(parts)
-	return payload == spec.Shell
+	if payload == spec.Shell {
+		return true
+	}
+	return execArgvMatchesShell(parts, spec.Shell)
 }
 
 func commandLineMatchesSpec(line string, spec *Spec) bool {
@@ -48,12 +51,35 @@ func commandLineMatchesSpec(line string, spec *Spec) bool {
 		}
 		return true
 	}
-	return shellPayloadFromCommandLine(line) == spec.Shell
+	if shellPayloadFromCommandLine(line) == spec.Shell {
+		return true
+	}
+	return execArgvMatchesShell(strings.Fields(line), spec.Shell)
+}
+
+func execArgvMatchesShell(parts []string, shell string) bool {
+	if shell == "" || len(parts) == 0 {
+		return false
+	}
+	joined := strings.Join(parts, " ")
+	if joined == shell {
+		return true
+	}
+	if len(parts) >= 2 {
+		norm := filepath.Base(parts[0]) + " " + strings.Join(parts[1:], " ")
+		if norm == shell {
+			return true
+		}
+	}
+	return false
 }
 
 func isShellExecutable(name string) bool {
 	base := strings.ToLower(filepath.Base(name))
-	return base == "sh" || base == "bash" || base == "zsh" || base == "cmd.exe" || base == "cmd"
+	if strings.TrimPrefix(base, "-") == "sh" {
+		return true
+	}
+	return base == "bash" || base == "zsh" || base == "cmd.exe" || base == "cmd"
 }
 
 func cmdlineMatchesPartsPtr(parts []string, spec *Spec) bool {

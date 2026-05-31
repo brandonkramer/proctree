@@ -31,6 +31,7 @@ func TestCmdlineMatchesSpec(t *testing.T) {
 		},
 		{name: "exec match", spec: Spec{Path: "/bin/echo", Args: []string{"hi"}}, parts: []string{"/bin/echo", "hi"}, want: true},
 		{name: "exec extra args", spec: Spec{Path: "/bin/echo", Args: []string{"hi"}}, parts: []string{"/bin/echo", "hi", "extra"}, want: false},
+		{name: "exec shell command", goos: "unix", spec: Spec{Shell: "sleep 300"}, parts: []string{"/usr/bin/sleep", "300"}, want: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

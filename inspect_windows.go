@@ -41,6 +41,7 @@ type processMemoryCounters struct {
 type unicodeString struct {
 	Length        uint16
 	MaximumLength uint16
+	_             [4]byte
 	Buffer        *uint16
 }
 
@@ -166,22 +167,28 @@ func normalizeWindowsShellPayload(payload string) string {
 
 func openProcessQuery(pid uint32) (windows.Handle, error) {
 	const access = windows.PROCESS_QUERY_LIMITED_INFORMATION | windows.PROCESS_VM_READ
-	return windows.OpenProcess(access, false, pid)
+	handle, err := windows.OpenProcess(access, false, pid)
+	if err == nil {
+		return handle, nil
+	}
+	const fullAccess = windows.PROCESS_QUERY_INFORMATION | windows.PROCESS_VM_READ
+	return windows.OpenProcess(fullAccess, false, pid)
 }
 
 func queryProcessCommandLine(handle windows.Handle) (string, error) {
-	var us unicodeString
+	buf := make([]byte, 4096)
 	var retLen uint32
 	r0, _, e1 := procNtQueryInformationProcess.Call(
 		uintptr(handle),
 		uintptr(processCommandLineInformation),
-		uintptr(unsafe.Pointer(&us)),
-		uintptr(unsafe.Sizeof(us)),
+		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(len(buf)),
 		uintptr(unsafe.Pointer(&retLen)),
 	)
 	if r0 != 0 {
 		return "", e1
 	}
+	us := (*unicodeString)(unsafe.Pointer(&buf[0]))
 	if us.Buffer == nil || us.Length == 0 {
 		return "", fmt.Errorf("cmdline unavailable")
 	}
@@ -189,19 +196,19 @@ func queryProcessCommandLine(handle windows.Handle) (string, error) {
 		return "", fmt.Errorf("cmdline unavailable")
 	}
 	n := int(us.Length / 2)
-	buf := make([]uint16, n)
+	raw := make([]uint16, n)
 	var nread uintptr
 	r0, _, e1 = procReadProcessMemory.Call(
 		uintptr(handle),
 		uintptr(unsafe.Pointer(us.Buffer)),
-		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(unsafe.Pointer(&raw[0])),
 		uintptr(us.Length),
 		uintptr(unsafe.Pointer(&nread)),
 	)
 	if r0 == 0 {
 		return "", e1
 	}
-	return windows.UTF16ToString(buf), nil
+	return windows.UTF16ToString(raw), nil
 }
 
 func processCreateTime(handle windows.Handle) (time.Time, error) {
