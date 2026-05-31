@@ -41,7 +41,6 @@ type processMemoryCounters struct {
 type unicodeString struct {
 	Length        uint16
 	MaximumLength uint16
-	_             [4]byte
 	Buffer        *uint16
 }
 
@@ -58,6 +57,7 @@ var (
 	procProcess32FirstW           = modKernel32.NewProc("Process32FirstW")
 	procProcess32NextW            = modKernel32.NewProc("Process32NextW")
 	procGetProcessMemoryInfo      = modPsapi.NewProc("GetProcessMemoryInfo")
+	procReadProcessMemory         = modKernel32.NewProc("ReadProcessMemory")
 	procNtQueryInformationProcess = modNtdll.NewProc("NtQueryInformationProcess")
 )
 
@@ -170,31 +170,38 @@ func openProcessQuery(pid uint32) (windows.Handle, error) {
 }
 
 func queryProcessCommandLine(handle windows.Handle) (string, error) {
-	buf := make([]byte, 4096)
+	var us unicodeString
 	var retLen uint32
 	r0, _, e1 := procNtQueryInformationProcess.Call(
 		uintptr(handle),
 		uintptr(processCommandLineInformation),
-		uintptr(unsafe.Pointer(&buf[0])),
-		uintptr(len(buf)),
+		uintptr(unsafe.Pointer(&us)),
+		uintptr(unsafe.Sizeof(us)),
 		uintptr(unsafe.Pointer(&retLen)),
 	)
 	if r0 != 0 {
 		return "", e1
 	}
-	us := (*unicodeString)(unsafe.Pointer(&buf[0]))
 	if us.Buffer == nil || us.Length == 0 {
 		return "", fmt.Errorf("cmdline unavailable")
 	}
-	n := int(us.Length / 2)
-	if n <= 0 {
+	if us.Length%2 != 0 {
 		return "", fmt.Errorf("cmdline unavailable")
 	}
-	s := make([]uint16, n)
-	for i := 0; i < n; i++ {
-		s[i] = *(*uint16)(unsafe.Pointer(uintptr(unsafe.Pointer(us.Buffer)) + uintptr(i*2)))
+	n := int(us.Length / 2)
+	buf := make([]uint16, n)
+	var nread uintptr
+	r0, _, e1 = procReadProcessMemory.Call(
+		uintptr(handle),
+		uintptr(unsafe.Pointer(us.Buffer)),
+		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(us.Length),
+		uintptr(unsafe.Pointer(&nread)),
+	)
+	if r0 == 0 {
+		return "", e1
 	}
-	return windows.UTF16ToString(s), nil
+	return windows.UTF16ToString(buf), nil
 }
 
 func processCreateTime(handle windows.Handle) (time.Time, error) {

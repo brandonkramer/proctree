@@ -57,6 +57,14 @@ func TestWindowsVerifyOwned(t *testing.T) {
 	spec := longRunningSpec()
 	cmd := startSpec(t, &spec)
 	time.Sleep(200 * time.Millisecond)
+
+	parts, err := Cmdline(cmd.Process.Pid)
+	if err != nil {
+		t.Fatalf("cmdline err=%v", err)
+	}
+	if !cmdlineMatchesPartsPtr(parts, &spec) {
+		t.Fatalf("cmdline=%v spec=%+v", parts, spec)
+	}
 	if !VerifyOwned(cmd.Process.Pid, &spec) {
 		t.Fatal("expected ownership match")
 	}
