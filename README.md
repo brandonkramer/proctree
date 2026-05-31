@@ -181,11 +181,13 @@ Run the same checks as CI before pushing:
 ./scripts/check.sh
 ```
 
-Optional pre-push hook (once per clone):
+Git hooks via [lefthook](https://github.com/evilmartians/lefthook) (once per clone):
 
 ```bash
-git config core.hooksPath .githooks
+./scripts/install-hooks.sh
 ```
+
+`git push` then runs `./scripts/check.sh` automatically. Skip with `LEFTHOOK=0 git push`.
 
 `scripts/check.sh` runs `go test -race`, a Linux cross-compile check, and `golangci-lint` installed with your local Go toolchain (must be >= `go.mod`). CI pins `GOLANGCI_LINT_VERSION` in `.github/workflows/test.yml`.
 
