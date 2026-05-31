@@ -15,7 +15,7 @@ func cmdlineMatchesSpec(parts []string, spec *Spec) bool {
 				return false
 			}
 		}
-		return true
+		return len(parts) == 1+len(spec.Args)
 	}
 	payload := shellPayloadFromParts(parts)
 	return payload == spec.Shell

@@ -46,6 +46,34 @@ res, err := proctree.Run(ctx, &proctree.Spec{
 })
 ```
 
+
+### Recovery reconcile
+
+```go
+res := proctree.ReconcilePID(pid, &proctree.Ownership{
+    Spec:      *spec,
+    StartedAt: startedAt,
+})
+switch res.Outcome {
+case proctree.ReconcileKilled:
+    // verified and terminated
+case proctree.ReconcileUnverified:
+    // alive but not ours — left running (fail closed)
+case proctree.ReconcileNotRunning:
+    // already gone
+}
+```
+
+### Tee stdout/stderr to logs + callbacks
+
+```go
+opts := proctree.TeeOptions(stdoutFile, stderrFile,
+    func(line string) { emit("stdout", line) },
+    func(line string) { emit("stderr", line) },
+)
+proctree.Run(ctx, spec, opts)
+```
+
 ### Ownership verification (PID reuse safe)
 
 ```go
@@ -102,7 +130,7 @@ proctree.VerifyOwned(pid, spec)
 |----------|-------------------|-----------|-------|-----------------|------------------|
 | Linux    | `Setpgid`         | `SIGKILL` to `-pid` | `kill(0)` | `/proc` | cmdline + pgid + create time |
 | macOS    | `Setpgid`         | `SIGKILL` to `-pid` and `pid` | `ps` stat (skip zombies) | `ps` | cmdline + pgid + create time |
-| Windows  | new process group | `taskkill /T /F` | `OpenProcess` | Toolhelp + NT APIs | cmdline + create time |
+| Windows  | new process group + Job Object | Job terminate (fallback: descendant walk) | `OpenProcess` | Toolhelp + NT APIs | cmdline + create time |
 
 ### Windows notes
 
@@ -121,6 +149,13 @@ On Linux, a defunct (zombie) pid may still answer `kill(pid,0)`. macOS `Alive` f
 - `KillTree(cmd)` / `KillTreeByPID(pid)` — terminate process trees
 - `Alive(pid)` — liveness probe
 
+**Recovery**
+- `ReconcilePID(pid, own)` / `ReconcilePIDOpts(pid, own, opts)` — verify-and-kill for daemon recovery
+- `WaitNotAlive(pid, timeout)` — poll until process exits
+
+**Streaming helpers**
+- `TeeLine(w, fn)` / `TeeOptions(stdoutW, stderrW, onStdout, onStderr)` — mirror lines to writers and callbacks
+
 **Verification**
 - `VerifyOwned(pid, spec)` — cmdline + platform checks
 - `VerifyOwnership(pid, own)` — adds create-time window and optional `CmdlineMatcher`
@@ -138,7 +173,6 @@ proctree targets **supervised process trees**, not general command ergonomics. O
 
 - **PTY / TTY allocation** — use a dedicated PTY library or run interactively outside proctree
 - **Shell pipelines** (`cmd | cmd`) — compose with `os/exec` pipes or a pipeline helper; proctree runs one root command tree
-- **Windows Job Objects** — cleanup uses `taskkill /T /F`; Job Objects may come later for stronger guarantees
 - **Built-in retry/backoff** — callers own policy on top of `Run`
 - **Log rotation / persistence** — use `Options.Stdout`/`Stderr` writers or callbacks
 - **Container/cgroup isolation** — run inside your orchestrator; proctree supervises the root pid you give it

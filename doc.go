@@ -7,7 +7,7 @@
 // Platform notes:
 //   - Unix (Linux, macOS): commands start with Setpgid; KillTreeByPID sends SIGKILL to -pid.
 //   - macOS: Alive ignores zombie processes; KillTreeByPID also signals the leader pid.
-//   - Windows: commands start in a new process group; KillTreeByPID uses taskkill /T /F.
+//   - Windows: commands start in a new process group with a kill-on-close Job Object when available.
 //     Inspect uses Toolhelp snapshots and NT APIs (NtQueryInformationProcess, GetProcessTimes).
 //   - VerifyOwnership fails closed when cmdline or create-time cannot be confirmed.
 package proctree

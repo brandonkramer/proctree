@@ -12,6 +12,8 @@ import (
 )
 
 const (
+	darwinStatusRunning = "running"
+
 	darwinProcStateIdle   int8 = 1
 	darwinProcStateRun    int8 = 2
 	darwinProcStateSleep  int8 = 3
@@ -151,7 +153,7 @@ func darwinStatus(stat int8) string {
 	case darwinProcStateZombie:
 		return "zombie"
 	case darwinProcStateRun, darwinProcStateIdle:
-		return "running"
+		return darwinStatusRunning
 	case darwinProcStateSleep:
 		return "sleeping"
 	case darwinProcStateStop:

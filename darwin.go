@@ -29,16 +29,6 @@ func KillTreeByPID(pid int) error {
 	}
 	_ = syscall.Kill(-pid, syscall.SIGKILL)
 	_ = syscall.Kill(pid, syscall.SIGKILL)
-	awaitNotAlive(pid, 250*time.Millisecond)
+	WaitNotAlive(pid, 250*time.Millisecond)
 	return nil
-}
-
-func awaitNotAlive(pid int, timeout time.Duration) {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if !Alive(pid) {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
 }

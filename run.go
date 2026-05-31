@@ -43,6 +43,8 @@ func Run(ctx context.Context, spec *Spec, opts *Options) (Result, error) {
 	if err := cmd.Start(); err != nil {
 		return Result{}, err
 	}
+	_ = attachRunJob(cmd)
+	defer releaseRunJob(cmd.Process.Pid)
 	res := Result{PID: cmd.Process.Pid, StartedAt: time.Now()}
 	if opts.OnStart != nil {
 		opts.OnStart(res.PID)

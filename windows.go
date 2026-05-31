@@ -6,6 +6,7 @@ import (
 	"context"
 	"os/exec"
 	"syscall"
+	"time"
 
 	"golang.org/x/sys/windows"
 )
@@ -48,6 +49,10 @@ func KillTreeByPID(pid int) error {
 	if pid <= 0 {
 		return nil
 	}
+	if killWindowsJob(pid) {
+		WaitNotAlive(pid, 250*time.Millisecond)
+		return nil
+	}
 	pids, err := Descendants(pid)
 	if err != nil {
 		return terminateProcess(pid)
@@ -55,6 +60,7 @@ func KillTreeByPID(pid int) error {
 	for i := len(pids) - 1; i >= 0; i-- {
 		_ = terminateProcess(pids[i])
 	}
+	WaitNotAlive(pid, 250*time.Millisecond)
 	return nil
 }
 

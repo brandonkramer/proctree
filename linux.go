@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"syscall"
+	"time"
 )
 
 // Alive reports whether pid refers to a running (non-zombie) process.
@@ -29,5 +30,9 @@ func KillTreeByPID(pid int) error {
 	if pid <= 0 {
 		return nil
 	}
-	return syscall.Kill(-pid, syscall.SIGKILL)
+	if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
+		return err
+	}
+	WaitNotAlive(pid, 250*time.Millisecond)
+	return nil
 }
