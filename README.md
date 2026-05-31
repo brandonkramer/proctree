@@ -10,12 +10,6 @@ From [pkg.go.dev](https://pkg.go.dev/github.com/brandonkramer/proctree):
 go get github.com/brandonkramer/proctree
 ```
 
-Pin a release if you want a specific version:
-
-```bash
-go get github.com/brandonkramer/proctree@v0.1.2
-```
-
 ## Quick start
 
 ### Shell command
