@@ -16,10 +16,10 @@ func setProcessGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
-// KillTree sends SIGKILL to the command's process group.
-func KillTree(cmd *exec.Cmd) {
-	if cmd == nil || cmd.Process == nil {
-		return
+func verifyProcessGroup(pid int) bool {
+	pgid, err := syscall.Getpgid(pid)
+	if err != nil || pgid != pid {
+		return false
 	}
-	_ = KillTreeByPID(cmd.Process.Pid)
+	return true
 }

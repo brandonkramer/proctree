@@ -1,7 +1,10 @@
 package proctree
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"os/exec"
 	"runtime"
 	"strings"
 	"sync"
@@ -106,6 +109,71 @@ func TestRunTimeoutKillsProcess(t *testing.T) {
 	}
 }
 
+func TestRunWithStdinAndWriterSinks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("cat test is unix-oriented")
+	}
+	ctx := context.Background()
+	var stdout bytes.Buffer
+	spec := Spec{Path: "/bin/cat"}
+	_, err := Run(ctx, &spec, &Options{
+		Stdin:  strings.NewReader("hello\n"),
+		Stdout: &stdout,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stdout.String() != "hello\n" {
+		t.Fatalf("stdout=%q", stdout.String())
+	}
+}
+
+func TestRunExitCodes(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	cases := []struct {
+		name    string
+		code    int
+		wantErr bool
+		skipWin bool
+	}{
+		{name: "non-zero", code: 1, wantErr: true},
+		{name: "zero", code: 0, wantErr: false, skipWin: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if tc.skipWin && runtime.GOOS == "windows" {
+				t.Skip("uses /bin/true on unix")
+			}
+			spec := exitSpec(tc.code)
+			res, err := Run(ctx, &spec, nil)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected non-zero exit error")
+				}
+				var exitErr *exec.ExitError
+				if !errors.As(err, &exitErr) {
+					t.Fatalf("expected ExitError, got %T: %v", err, err)
+				}
+				if res.ExitCode != tc.code {
+					t.Fatalf("exit=%d", res.ExitCode)
+				}
+				if res.Canceled || res.TimedOut {
+					t.Fatalf("result=%+v", res)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.ExitCode != 0 || res.Canceled || res.TimedOut {
+				t.Fatalf("result=%+v", res)
+			}
+		})
+	}
+}
+
 func TestKillTreeByPIDShellRun(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("unix-oriented kill test")
@@ -119,12 +187,70 @@ func TestKillTreeByPIDShellRun(t *testing.T) {
 	waitUntilNotAlive(t, cmd.Process.Pid, 2*time.Second)
 }
 
+func TestKillTreeNoProcess(t *testing.T) {
+	t.Run("nil cmd", func(t *testing.T) {
+		KillTree(nil)
+	})
+	t.Run("empty cmd", func(t *testing.T) {
+		KillTree(&exec.Cmd{})
+	})
+}
+
 func TestVerifyOwnedShellRun(t *testing.T) {
 	spec := Spec{Shell: "sleep 300"}
 	cmd := startSpec(t, &spec)
 	time.Sleep(200 * time.Millisecond)
 	if !VerifyOwned(cmd.Process.Pid, &spec) {
 		t.Fatalf("verify failed for pid=%d", cmd.Process.Pid)
+	}
+}
+
+func TestVerifyOwnershipCustomMatcher(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix sleep verify")
+	}
+	spec := Spec{Shell: "sleep 300"}
+	started := time.Now()
+	cmd := startSpec(t, &spec)
+	time.Sleep(200 * time.Millisecond)
+
+	t.Run("match", func(t *testing.T) {
+		own := Ownership{
+			StartedAt: started,
+			Match: func(parts []string) bool {
+				joined := strings.Join(parts, " ")
+				return strings.Contains(joined, "sleep")
+			},
+		}
+		if !VerifyOwnership(cmd.Process.Pid, &own) {
+			t.Fatal("expected custom matcher to match")
+		}
+	})
+	t.Run("reject", func(t *testing.T) {
+		own := Ownership{
+			StartedAt: started,
+			Match:     func([]string) bool { return false },
+		}
+		if VerifyOwnership(cmd.Process.Pid, &own) {
+			t.Fatal("expected custom matcher rejection")
+		}
+	})
+}
+
+func TestVerifyOwnershipOptsMatcherOverride(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix sleep verify")
+	}
+	spec := Spec{Shell: "sleep 300"}
+	cmd := startSpec(t, &spec)
+	time.Sleep(200 * time.Millisecond)
+
+	own := Ownership{Spec: spec}
+	opts := VerifyOptions{
+		Match: func([]string) bool { return true },
+	}
+	if !VerifyOwnershipOpts(cmd.Process.Pid, &own, &opts) {
+		t.Fatal("expected opts matcher override")
 	}
 }
 

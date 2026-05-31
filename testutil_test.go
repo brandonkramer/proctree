@@ -11,7 +11,7 @@ import (
 func startSpec(t *testing.T, spec *Spec) *exec.Cmd {
 	t.Helper()
 	cmd := NewCommand(spec)
-	if err := cmd.Start(); err != nil {
+	if err := Start(cmd); err != nil {
 		t.Fatal(err)
 	}
 	pid := cmd.Process.Pid

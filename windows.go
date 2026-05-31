@@ -4,6 +4,7 @@ package proctree
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"syscall"
 	"time"
@@ -21,12 +22,9 @@ func setProcessGroup(cmd *exec.Cmd) {
 	}
 }
 
-// KillTree terminates the command process tree.
-func KillTree(cmd *exec.Cmd) {
-	if cmd == nil || cmd.Process == nil {
-		return
-	}
-	_ = KillTreeByPID(cmd.Process.Pid)
+func verifyProcessGroup(_ int) bool {
+	// Windows lacks a cheap pgid==pid invariant; rely on cmdline + create time.
+	return true
 }
 
 // Alive reports whether pid refers to a live process.
@@ -38,11 +36,18 @@ func Alive(pid int) bool {
 	if err != nil {
 		return false
 	}
-	_ = syscall.CloseHandle(handle)
-	return true
+	defer syscall.CloseHandle(handle)
+	var exitCode uint32
+	if err := syscall.GetExitCodeProcess(handle, &exitCode); err != nil {
+		return false
+	}
+	return exitCode == stillActive
 }
 
-const processQueryLimitedInformation = 0x1000
+const (
+	processQueryLimitedInformation = 0x1000
+	stillActive                    = 259
+)
 
 // KillTreeByPID terminates pid and all known descendants.
 func KillTreeByPID(pid int) error {
@@ -50,17 +55,38 @@ func KillTreeByPID(pid int) error {
 		return nil
 	}
 	if killWindowsJob(pid) {
-		WaitNotAlive(pid, 250*time.Millisecond)
+		waitProcessExit(pid, 2*time.Second)
 		return nil
 	}
 	pids, err := Descendants(pid)
 	if err != nil {
-		return terminateProcess(pid)
+		_ = terminateProcess(pid)
+	} else {
+		for i := len(pids) - 1; i >= 0; i-- {
+			_ = terminateProcess(pids[i])
+		}
 	}
-	for i := len(pids) - 1; i >= 0; i-- {
-		_ = terminateProcess(pids[i])
+	if waitProcessExit(pid, 250*time.Millisecond) {
+		return nil
 	}
-	WaitNotAlive(pid, 250*time.Millisecond)
+	_ = taskKillTree(pid)
+	waitProcessExit(pid, 2*time.Second)
+	return nil
+}
+
+func waitProcessExit(pid int, timeout time.Duration) bool {
+	return WaitNotAlive(pid, timeout)
+}
+
+func taskKillTree(pid int) error {
+	cmd := exec.Command("taskkill", "/PID", fmt.Sprint(pid), "/T", "/F")
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	if err := cmd.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 128 {
+			return nil
+		}
+		return err
+	}
 	return nil
 }
 

@@ -136,6 +136,15 @@ func InspectTree(root int) ([]ProcessInfo, error) {
 	return out, nil
 }
 
+// VerifyOwned reports whether pid still refers to the process started for spec.
+// Returns false when ownership cannot be confirmed (fail closed).
+func VerifyOwned(pid int, spec *Spec) bool {
+	if spec == nil {
+		return false
+	}
+	return VerifyOwnership(pid, &Ownership{Spec: *spec})
+}
+
 // VerifyOwnership reports whether pid still matches own using cmdline, optional
 // create-time window, and platform group checks. Fails closed when uncertain.
 func VerifyOwnership(pid int, own *Ownership) bool {

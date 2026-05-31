@@ -40,10 +40,9 @@ func Run(ctx context.Context, spec *Spec, opts *Options) (Result, error) {
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
-	if err := cmd.Start(); err != nil {
+	if err := Start(cmd); err != nil {
 		return Result{}, err
 	}
-	_ = attachRunJob(cmd)
 	defer releaseRunJob(cmd.Process.Pid)
 	res := Result{PID: cmd.Process.Pid, StartedAt: time.Now()}
 	if opts.OnStart != nil {
