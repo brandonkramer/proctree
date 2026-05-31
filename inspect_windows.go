@@ -3,6 +3,7 @@
 package proctree
 
 import (
+	"encoding/binary"
 	"fmt"
 	"strings"
 	"syscall"
@@ -189,26 +190,86 @@ func queryProcessCommandLine(handle windows.Handle) (string, error) {
 		return "", e1
 	}
 	us := (*unicodeString)(unsafe.Pointer(&buf[0]))
-	if us.Buffer == nil || us.Length == 0 {
+	if us.Length == 0 || us.Length%2 != 0 {
 		return "", fmt.Errorf("cmdline unavailable")
 	}
-	if us.Length%2 != 0 {
-		return "", fmt.Errorf("cmdline unavailable")
+	if line, ok := utf16FromQueryBuffer(buf, us); ok {
+		return line, nil
+	}
+	if us.Buffer != nil {
+		n := int(us.Length / 2)
+		raw := make([]uint16, n)
+		var nread uintptr
+		r0, _, e1 = procReadProcessMemory.Call(
+			uintptr(handle),
+			uintptr(unsafe.Pointer(us.Buffer)),
+			uintptr(unsafe.Pointer(&raw[0])),
+			uintptr(us.Length),
+			uintptr(unsafe.Pointer(&nread)),
+		)
+		if r0 != 0 {
+			return windows.UTF16ToString(raw), nil
+		}
+	}
+	if line, ok := inlineUTF16FromQueryBuffer(buf, us); ok {
+		return line, nil
+	}
+	if line, ok := legacyDerefUTF16(us); ok {
+		return line, nil
+	}
+	return "", fmt.Errorf("cmdline unavailable")
+}
+
+func utf16FromQueryBuffer(buf []byte, us *unicodeString) (string, bool) {
+	ptr := uintptr(unsafe.Pointer(us.Buffer))
+	base := uintptr(unsafe.Pointer(&buf[0]))
+	end := base + uintptr(len(buf))
+	if ptr < base || ptr >= end {
+		return "", false
+	}
+	off := int(ptr - base)
+	if off+int(us.Length) > len(buf) {
+		return "", false
 	}
 	n := int(us.Length / 2)
 	raw := make([]uint16, n)
-	var nread uintptr
-	r0, _, e1 = procReadProcessMemory.Call(
-		uintptr(handle),
-		uintptr(unsafe.Pointer(us.Buffer)),
-		uintptr(unsafe.Pointer(&raw[0])),
-		uintptr(us.Length),
-		uintptr(unsafe.Pointer(&nread)),
-	)
-	if r0 == 0 {
-		return "", e1
+	for i := 0; i < n; i++ {
+		raw[i] = binary.LittleEndian.Uint16(buf[off+i*2:])
 	}
-	return windows.UTF16ToString(raw), nil
+	return windows.UTF16ToString(raw), true
+}
+
+func inlineUTF16FromQueryBuffer(buf []byte, us *unicodeString) (string, bool) {
+	if us.Length == 0 || us.Length%2 != 0 {
+		return "", false
+	}
+	off := int(unsafe.Sizeof(*us))
+	if off+int(us.Length) > len(buf) {
+		return "", false
+	}
+	n := int(us.Length / 2)
+	raw := make([]uint16, n)
+	for i := 0; i < n; i++ {
+		raw[i] = binary.LittleEndian.Uint16(buf[off+i*2:])
+	}
+	return windows.UTF16ToString(raw), true
+}
+
+func legacyDerefUTF16(us *unicodeString) (string, bool) {
+	if us.Buffer == nil || us.Length == 0 || us.Length%2 != 0 {
+		return "", false
+	}
+	n := int(us.Length / 2)
+	raw := make([]uint16, n)
+	ptr := uintptr(unsafe.Pointer(us.Buffer))
+	for i := 0; i < n; i++ {
+		raw[i] = *(*uint16)(unsafe.Pointer(ptr + uintptr(i*2)))
+	}
+	line := strings.TrimSpace(windows.UTF16ToString(raw))
+	if line == "" {
+		return "", false
+	}
+	return line, true
 }
 
 func processCreateTime(handle windows.Handle) (time.Time, error) {
