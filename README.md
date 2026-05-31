@@ -1,0 +1,164 @@
+# proctree
+
+Cross-platform Go helpers for running shell and exec commands in an isolated process group or tree, streaming stdout/stderr, killing the full child tree on context cancellation or timeout, and inspecting process state.
+
+```bash
+go get github.com/brandon-kramer/proctree@v0.1.0
+```
+
+## Install
+
+```bash
+go get github.com/brandon-kramer/proctree
+```
+
+## Quick start
+
+### Shell command
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+
+var buf bytes.Buffer
+spec := &proctree.Spec{Shell: "make test"}
+opts := &proctree.Options{
+    OnStdout: func(line string) { fmt.Println("out:", line) },
+    Stdout:   &buf,
+}
+res, err := proctree.Run(ctx, spec, opts)
+if err != nil {
+    // context.Canceled, context.DeadlineExceeded, or non-zero exit
+}
+fmt.Println("exit", res.ExitCode, "pid", res.PID, "started", res.StartedAt)
+```
+
+### Exec (argv) — preferred when possible
+
+```go
+res, err := proctree.Run(ctx, &proctree.Spec{
+    Path: "/usr/bin/git",
+    Args: []string{"status", "--short"},
+    Dir:  "/path/to/repo",
+    Env:  []string{"GIT_TERMINAL_PROMPT=0"},
+}, &proctree.Options{
+    Stdin: strings.NewReader(""),
+})
+```
+
+### Ownership verification (PID reuse safe)
+
+```go
+own := &proctree.Ownership{
+    Spec:      *spec,
+    StartedAt: res.StartedAt,
+}
+if proctree.VerifyOwnership(pid, own) {
+    _ = proctree.KillTreeByPID(pid)
+}
+```
+
+Custom matcher for processes that do not match `Spec` shape:
+
+```go
+own := &proctree.Ownership{
+    StartedAt: res.StartedAt,
+    Match: func(parts []string) bool {
+        return len(parts) > 0 && strings.Contains(parts[0], "my-worker")
+    },
+}
+proctree.VerifyOwnershipOpts(pid, own, &proctree.VerifyOptions{
+    SkipProcessGroup: true,
+})
+```
+
+`VerifyOwnership` checks cmdline match, Unix process-group leader (when applicable), and optional create-time window. Fails closed when uncertain.
+
+### Introspection and recovery
+
+```go
+info, err := proctree.Inspect(pid)
+// info.Cmdline, info.CreateTime, info.MemoryRSS, info.Status, info.OpenFiles (linux)
+
+kids, _ := proctree.Children(pid)
+tree, _ := proctree.InspectTree(pid) // pid + descendants
+```
+
+### Low-level helpers
+
+```go
+cmd := proctree.NewCommand(&proctree.Spec{Shell: "sleep 300"})
+cmd.Start()
+proctree.KillTree(cmd)
+
+proctree.KillTreeByPID(pid)
+proctree.Alive(pid)
+proctree.VerifyOwned(pid, spec)
+```
+
+## Platform behavior
+
+| Platform | Process isolation | Tree kill | Alive | Inspect sources | Ownership verify |
+|----------|-------------------|-----------|-------|-----------------|------------------|
+| Linux    | `Setpgid`         | `SIGKILL` to `-pid` | `kill(0)` | `/proc` | cmdline + pgid + create time |
+| macOS    | `Setpgid`         | `SIGKILL` to `-pid` and `pid` | `ps` stat (skip zombies) | `ps` | cmdline + pgid + create time |
+| Windows  | new process group | `taskkill /T /F` | `OpenProcess` | Toolhelp + NT APIs | cmdline + create time |
+
+### Windows notes
+
+- Inspect uses `NtQueryInformationProcess`, `GetProcessTimes`, and `GetProcessMemoryInfo` (no `wmic`).
+- Job Objects are **not** used for tree cleanup yet; see non-goals below.
+
+### Unix zombie processes
+
+On Linux, a defunct (zombie) pid may still answer `kill(pid,0)`. macOS `Alive` filters zombies via `ps` state. Use `VerifyOwnership` before killing stale pids.
+
+## API surface
+
+**Execution**
+- `Run(ctx, spec, opts)` — context-first execution with streaming, optional stdin/writer sinks, tree kill on cancel/timeout
+- `NewCommand(spec)` — build a configured `*exec.Cmd` without starting
+- `KillTree(cmd)` / `KillTreeByPID(pid)` — terminate process trees
+- `Alive(pid)` — liveness probe
+
+**Verification**
+- `VerifyOwned(pid, spec)` — cmdline + platform checks
+- `VerifyOwnership(pid, own)` — adds create-time window and optional `CmdlineMatcher`
+- `VerifyOwnershipOpts(pid, own, opts)` — tune timing, matcher, and `SkipProcessGroup`
+
+**Introspection**
+- `Inspect(pid)` — point-in-time `ProcessInfo` snapshot
+- `InspectTree(root)` — snapshots for root + descendants
+- `Children(pid)` / `Descendants(root)` — process tree discovery
+- `Cmdline(pid)` / `CreateTime(pid)` — convenience accessors
+
+## Non-goals
+
+proctree targets **supervised process trees**, not general command ergonomics. Out of scope for now:
+
+- **PTY / TTY allocation** — use a dedicated PTY library or run interactively outside proctree
+- **Shell pipelines** (`cmd | cmd`) — compose with `os/exec` pipes or a pipeline helper; proctree runs one root command tree
+- **Windows Job Objects** — cleanup uses `taskkill /T /F`; Job Objects may come later for stronger guarantees
+- **Built-in retry/backoff** — callers own policy on top of `Run`
+- **Log rotation / persistence** — use `Options.Stdout`/`Stderr` writers or callbacks
+- **Container/cgroup isolation** — run inside your orchestrator; proctree supervises the root pid you give it
+
+## Development
+
+```bash
+go mod tidy
+go test -race ./...
+golangci-lint run ./...
+```
+
+## Releases
+
+Tagged semver releases are published from this module:
+
+```bash
+go get github.com/brandon-kramer/proctree@v0.1.0
+```
+
+## License
+
+MIT
