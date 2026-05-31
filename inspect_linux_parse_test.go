@@ -45,7 +45,7 @@ func TestProcStateName(t *testing.T) {
 	}{
 		{state: 'R', want: "running"},
 		{state: 'S', want: "sleeping"},
-		{state: 'Z', want: "zombie"},
+		{state: 'Z', want: procStatusZombie},
 		{state: 'T', want: "stopped"},
 		{state: '?', want: "unknown"},
 	}
@@ -60,7 +60,7 @@ func TestProcStateName(t *testing.T) {
 }
 
 func TestAliveIgnoresZombieProcStat(t *testing.T) {
-	if got := procStateName('Z'); got != "zombie" {
+	if got := procStateName('Z'); got != procStatusZombie {
 		t.Fatalf("state=%q", got)
 	}
 }
@@ -73,7 +73,7 @@ func TestLinuxCreateTimeFromFixture(t *testing.T) {
 	if btime <= 0 || hz <= 0 {
 		t.Fatalf("btime=%d hz=%d", btime, hz)
 	}
-	starttime := uint64(hz) // one second after boot in ticks
+	starttime := uint64(hz) // One second after boot in ticks
 	created, err := linuxCreateTime(starttime)
 	if err != nil {
 		t.Fatal(err)

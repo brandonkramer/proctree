@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const procStatusZombie = "zombie"
+
 func readProcessInfo(pid int) (ProcessInfo, error) {
 	if !Alive(pid) {
 		return ProcessInfo{}, ErrProcessNotFound
@@ -117,12 +119,12 @@ func shellPayloadFromCommandLine(line string) string {
 
 func parseProcStat(stat []byte) (name string, state byte, ppid int, starttime uint64, err error) {
 	open := bytes.IndexByte(stat, '(')
-	close := bytes.LastIndexByte(stat, ')')
-	if open < 0 || close <= open {
+	closeIdx := bytes.LastIndexByte(stat, ')')
+	if open < 0 || closeIdx <= open {
 		return "", 0, 0, 0, fmt.Errorf("invalid proc stat")
 	}
-	name = string(stat[open+1 : close])
-	rest := strings.Fields(string(stat[close+2:]))
+	name = string(stat[open+1 : closeIdx])
+	rest := strings.Fields(string(stat[closeIdx+2:]))
 	if len(rest) < 20 {
 		return "", 0, 0, 0, fmt.Errorf("short proc stat")
 	}
@@ -141,7 +143,7 @@ func procStateName(state byte) string {
 	case 'D':
 		return "blocked"
 	case 'Z':
-		return "zombie"
+		return procStatusZombie
 	case 'T', 't':
 		return "stopped"
 	default:
@@ -158,23 +160,24 @@ func linuxCreateTime(starttime uint64) (time.Time, error) {
 	return time.Unix(int64(secs), int64((secs-float64(int64(secs)))*1e9)), nil
 }
 
-func linuxBootTime() (btime int64, hz int64, err error) {
+func linuxBootTime() (btime, hz int64, err error) {
 	data, err := os.ReadFile("/proc/stat")
 	if err != nil {
 		return 0, 0, err
 	}
 	for _, line := range strings.Split(string(data), "\n") {
-		if strings.HasPrefix(line, "btime ") {
-			fields := strings.Fields(line)
-			if len(fields) != 2 {
-				break
-			}
-			btime, err = strconv.ParseInt(fields[1], 10, 64)
-			if err != nil {
-				return 0, 0, err
-			}
+		if !strings.HasPrefix(line, "btime ") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
 			break
 		}
+		btime, err = strconv.ParseInt(fields[1], 10, 64)
+		if err != nil {
+			return 0, 0, err
+		}
+		break
 	}
 	if btime == 0 {
 		return 0, 0, fmt.Errorf("btime unavailable")
@@ -197,8 +200,11 @@ func readLinuxRSS(pid int) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	pageSize := uint64(os.Getpagesize())
-	return pages * pageSize, nil
+	pageSize := os.Getpagesize()
+	if pageSize <= 0 {
+		return 0, fmt.Errorf("invalid page size")
+	}
+	return pages * uint64(pageSize), nil
 }
 
 func readLinuxOpenFiles(pid int) (int, error) {
