@@ -167,21 +167,19 @@ proctree.VerifyOwned(pid, spec)
 
 ## Development
 
-Run the same checks as CI before pushing:
+Lefthook and golangci-lint are pinned in `go.mod` as **tools** (dev-only). Install git hooks once per clone:
 
 ```bash
-./scripts/check.sh
+make install-hooks
 ```
 
-Git hooks via [lefthook](https://github.com/evilmartians/lefthook) (once per clone):
+Hooks and `make lint` use `go tool` binaries from `go.mod`. Pre-commit lints staged `.go` files; pre-push runs `./scripts/check.sh`. Skip hooks with `LEFTHOOK=0 git push`.
 
 ```bash
-./scripts/install-hooks.sh
+make check
+make test
+make lint
 ```
-
-`git push` then runs `./scripts/check.sh` automatically. Skip with `LEFTHOOK=0 git push`.
-
-`scripts/check.sh` runs `go test -race`, a Linux cross-compile check, and `golangci-lint` installed with your local Go toolchain (must be >= `go.mod`). CI pins `GOLANGCI_LINT_VERSION` in `.github/workflows/test.yml`.
 
 ## Releases
 
