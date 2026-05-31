@@ -179,10 +179,8 @@ func linuxBootTime() (btime int64, hz int64, err error) {
 	if btime == 0 {
 		return 0, 0, fmt.Errorf("btime unavailable")
 	}
-	hz = int64(syscall.Sysconf(syscall.SC_CLK_TCK))
-	if hz <= 0 {
-		hz = 100
-	}
+	// USER_HZ is 100 on standard Linux kernels; Go 1.26 removed syscall.Sysconf.
+	hz = 100
 	return btime, hz, nil
 }
 
