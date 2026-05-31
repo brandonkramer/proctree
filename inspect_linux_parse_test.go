@@ -19,31 +19,47 @@ func TestParseProcStat(t *testing.T) {
 }
 
 func TestParseProcStatRejectsMalformed(t *testing.T) {
-	if _, _, _, _, err := parseProcStat([]byte("not-a-stat-line")); err == nil {
-		t.Fatal("expected parse error")
+	t.Parallel()
+	cases := []struct {
+		name string
+		line []byte
+	}{
+		{name: "not stat", line: []byte("not-a-stat-line")},
+		{name: "short stat", line: []byte("(x) S 1")},
 	}
-	if _, _, _, _, err := parseProcStat([]byte("(x) S 1")); err == nil {
-		t.Fatal("expected short stat error")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if _, _, _, _, err := parseProcStat(tc.line); err == nil {
+				t.Fatal("expected parse error")
+			}
+		})
 	}
 }
 
 func TestProcStateName(t *testing.T) {
-	cases := map[byte]string{
-		'R': "running",
-		'S': "sleeping",
-		'Z': "zombie",
-		'T': "stopped",
-		'?': "unknown",
+	t.Parallel()
+	cases := []struct {
+		state byte
+		want  string
+	}{
+		{state: 'R', want: "running"},
+		{state: 'S', want: "sleeping"},
+		{state: 'Z', want: "zombie"},
+		{state: 'T', want: "stopped"},
+		{state: '?', want: "unknown"},
 	}
-	for state, want := range cases {
-		if got := procStateName(state); got != want {
-			t.Fatalf("state %c: got %q want %q", state, got, want)
-		}
+	for _, tc := range cases {
+		t.Run(tc.want, func(t *testing.T) {
+			t.Parallel()
+			if got := procStateName(tc.state); got != tc.want {
+				t.Fatalf("state %c: got %q want %q", tc.state, got, tc.want)
+			}
+		})
 	}
 }
 
 func TestAliveIgnoresZombieProcStat(t *testing.T) {
-	// Zombie pids still answer kill(0); Alive must consult /proc stat.
 	if got := procStateName('Z'); got != "zombie" {
 		t.Fatalf("state=%q", got)
 	}

@@ -3,42 +3,48 @@ package proctree
 import (
 	"errors"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 )
 
 func TestInspectInvalidPID(t *testing.T) {
+	t.Parallel()
 	for _, pid := range []int{0, -1} {
-		_, err := Inspect(pid)
-		if !errors.Is(err, ErrProcessNotFound) {
-			t.Fatalf("pid=%d err=%v", pid, err)
-		}
+		t.Run(strconv.Itoa(pid), func(t *testing.T) {
+			t.Parallel()
+			_, err := Inspect(pid)
+			if !errors.Is(err, ErrProcessNotFound) {
+				t.Fatalf("pid=%d err=%v", pid, err)
+			}
+		})
 	}
 }
 
 func TestChildrenAndDescendantsInvalidPID(t *testing.T) {
-	if _, err := Children(0); !errors.Is(err, ErrProcessNotFound) {
-		t.Fatalf("children err=%v", err)
-	}
-	if _, err := Descendants(-1); !errors.Is(err, ErrProcessNotFound) {
-		t.Fatalf("descendants err=%v", err)
-	}
+	t.Parallel()
+	t.Run("children", func(t *testing.T) {
+		t.Parallel()
+		if _, err := Children(0); !errors.Is(err, ErrProcessNotFound) {
+			t.Fatalf("children err=%v", err)
+		}
+	})
+	t.Run("descendants", func(t *testing.T) {
+		t.Parallel()
+		if _, err := Descendants(-1); !errors.Is(err, ErrProcessNotFound) {
+			t.Fatalf("descendants err=%v", err)
+		}
+	})
 }
 
 func TestInspectDeadProcess(t *testing.T) {
-	cmd, cleanup := startLongRunning(t)
-	defer cleanup()
+	cmd := startLongRunning(t)
 	pid := cmd.Process.Pid
 	if err := KillTreeByPID(pid); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if !Alive(pid) {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitUntilNotAlive(t, pid, 2*time.Second)
+
 	_, err := Inspect(pid)
 	if !errors.Is(err, ErrProcessNotFound) {
 		t.Fatalf("expected not found, got %v", err)
@@ -46,8 +52,7 @@ func TestInspectDeadProcess(t *testing.T) {
 }
 
 func TestCmdlineAndCreateTimeRunningProcess(t *testing.T) {
-	cmd, cleanup := startLongRunning(t)
-	defer cleanup()
+	cmd := startLongRunning(t)
 
 	parts, err := Cmdline(cmd.Process.Pid)
 	if err != nil {
@@ -74,8 +79,7 @@ func TestCmdlineUnavailableForInvalidPID(t *testing.T) {
 }
 
 func TestInspectTreeIncludesRoot(t *testing.T) {
-	cmd, cleanup := startLongRunning(t)
-	defer cleanup()
+	cmd := startLongRunning(t)
 
 	tree, err := InspectTree(cmd.Process.Pid)
 	if err != nil {
@@ -102,12 +106,8 @@ func TestInspectTreeWithChildren(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("unix-oriented shell background job tree")
 	}
-	spec := Spec{Shell: "sleep 300 & sleep 300 & wait"}
-	cmd := NewCommand(&spec)
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = KillTreeByPID(cmd.Process.Pid) }()
+	childSpec := Spec{Shell: "sleep 300 & sleep 300 & wait"}
+	cmd := startSpec(t, &childSpec)
 	time.Sleep(300 * time.Millisecond)
 
 	tree, err := InspectTree(cmd.Process.Pid)
@@ -132,21 +132,14 @@ func TestVerifyOwnershipNilOwnership(t *testing.T) {
 }
 
 func TestVerifyOwnershipDeadPID(t *testing.T) {
-	cmd, cleanup := startLongRunning(t)
-	defer cleanup()
+	cmd := startLongRunning(t)
 	spec := longRunningSpec()
 	own := Ownership{Spec: spec, StartedAt: time.Now()}
 	pid := cmd.Process.Pid
 	if err := KillTreeByPID(pid); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if !Alive(pid) {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitUntilNotAlive(t, pid, 2*time.Second)
 	if VerifyOwnership(pid, &own) {
 		t.Fatal("expected dead pid to fail verification")
 	}

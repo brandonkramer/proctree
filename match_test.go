@@ -5,72 +5,50 @@ import (
 	"testing"
 )
 
-func TestCmdlineMatchesSpecShellCommand(t *testing.T) {
-	spec := Spec{Shell: "sleep 5"}
-	parts := []string{"sh", "-c", "sleep 5"}
-	if !cmdlineMatchesSpec(parts, &spec) {
-		t.Fatal("expected shell command match")
+func TestCmdlineMatchesSpec(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		spec  Spec
+		parts []string
+		want  bool
+	}{
+		{name: "shell match", spec: Spec{Shell: "sleep 5"}, parts: []string{"sh", "-c", "sleep 5"}, want: true},
+		{name: "shell mismatch", spec: Spec{Shell: "sleep 5"}, parts: []string{"sh", "-c", "echo nope"}, want: false},
+		{name: "exec match", spec: Spec{Path: "/bin/echo", Args: []string{"hi"}}, parts: []string{"/bin/echo", "hi"}, want: true},
+		{name: "exec extra args", spec: Spec{Path: "/bin/echo", Args: []string{"hi"}}, parts: []string{"/bin/echo", "hi", "extra"}, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := cmdlineMatchesSpec(tc.parts, &tc.spec); got != tc.want {
+				t.Fatalf("got %v want %v", got, tc.want)
+			}
+		})
 	}
 }
 
-func TestCmdlineMatchesSpecRejectsMismatchedShellCommand(t *testing.T) {
-	spec := Spec{Shell: "sleep 5"}
-	parts := []string{"sh", "-c", "echo nope"}
-	if cmdlineMatchesSpec(parts, &spec) {
-		t.Fatal("expected mismatch")
+func TestCommandLineMatchesSpec(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		spec Spec
+		line string
+		want bool
+	}{
+		{name: "darwin shell", spec: Spec{Shell: "sleep 300"}, line: "/bin/sh -c sleep 300", want: true},
+		{name: "bare shell", spec: Spec{Shell: "make test"}, line: "make test", want: true},
+		{name: "exec line", spec: Spec{Path: "/usr/bin/git", Args: []string{"status", "--short"}}, line: "/usr/bin/git status --short", want: true},
+		{name: "shell mismatch", spec: Spec{Shell: "sleep 300"}, line: "/bin/sh -c echo nope", want: false},
+		{name: "empty line", spec: Spec{Shell: "sleep 1"}, line: "   ", want: false},
 	}
-}
-
-func TestCmdlineMatchesSpecExecPath(t *testing.T) {
-	spec := Spec{Path: "/bin/echo", Args: []string{"hi"}}
-	parts := []string{"/bin/echo", "hi"}
-	if !cmdlineMatchesSpec(parts, &spec) {
-		t.Fatal("expected exec match")
-	}
-}
-
-func TestCmdlineMatchesSpecExecRejectsExtraArgs(t *testing.T) {
-	spec := Spec{Path: "/bin/echo", Args: []string{"hi"}}
-	parts := []string{"/bin/echo", "hi", "extra"}
-	if cmdlineMatchesSpec(parts, &spec) {
-		t.Fatal("expected mismatch for extra args")
-	}
-}
-
-func TestCommandLineMatchesSpecDarwinStyleShell(t *testing.T) {
-	spec := Spec{Shell: "sleep 300"}
-	line := "/bin/sh -c sleep 300"
-	if !commandLineMatchesSpec(line, &spec) {
-		t.Fatal("expected ps-style shell match")
-	}
-}
-
-func TestCommandLineMatchesSpecBareShell(t *testing.T) {
-	spec := Spec{Shell: "make test"}
-	if !commandLineMatchesSpec("make test", &spec) {
-		t.Fatal("expected bare shell match")
-	}
-}
-
-func TestCommandLineMatchesSpecExecPathLine(t *testing.T) {
-	spec := Spec{Path: "/usr/bin/git", Args: []string{"status", "--short"}}
-	line := "/usr/bin/git status --short"
-	if !commandLineMatchesSpec(line, &spec) {
-		t.Fatal("expected exec line match")
-	}
-}
-
-func TestCommandLineMatchesSpecRejectsMismatchedShell(t *testing.T) {
-	spec := Spec{Shell: "sleep 300"}
-	if commandLineMatchesSpec("/bin/sh -c echo nope", &spec) {
-		t.Fatal("expected mismatch")
-	}
-}
-
-func TestCommandLineMatchesSpecRejectsEmptyLine(t *testing.T) {
-	spec := Spec{Shell: "sleep 1"}
-	if commandLineMatchesSpec("   ", &spec) {
-		t.Fatal("expected empty line mismatch")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := commandLineMatchesSpec(tc.line, &tc.spec); got != tc.want {
+				t.Fatalf("got %v want %v", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -83,17 +61,24 @@ func TestCmdlineMatchesPartsPtrJoinedFallback(t *testing.T) {
 }
 
 func TestIsShellExecutable(t *testing.T) {
-	cases := map[string]bool{
-		"/bin/sh":             true,
-		"/usr/local/bin/bash": true,
-		"zsh":                 true,
-		"cmd.exe":             true,
-		"python3":             false,
+	t.Parallel()
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{name: "/bin/sh", want: true},
+		{name: "/usr/local/bin/bash", want: true},
+		{name: "zsh", want: true},
+		{name: "cmd.exe", want: true},
+		{name: "python3", want: false},
 	}
-	for name, want := range cases {
-		if got := isShellExecutable(name); got != want {
-			t.Fatalf("%s: got %v want %v", name, got, want)
-		}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isShellExecutable(tc.name); got != tc.want {
+				t.Fatalf("got %v want %v", got, tc.want)
+			}
+		})
 	}
 }
 

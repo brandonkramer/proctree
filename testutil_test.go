@@ -8,29 +8,34 @@ import (
 	"time"
 )
 
-func startLongRunning(t *testing.T) (cmd *exec.Cmd, cleanup func()) {
+func startSpec(t *testing.T, spec *Spec) *exec.Cmd {
 	t.Helper()
-	spec := longRunningSpec()
-	cmd = NewCommand(&spec)
+	cmd := NewCommand(spec)
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	cleanup = func() {
-		_ = KillTreeByPID(cmd.Process.Pid)
+	pid := cmd.Process.Pid
+	t.Cleanup(func() {
+		_ = KillTreeByPID(pid)
 		_ = cmd.Process.Kill()
 		_, _ = cmd.Process.Wait()
-	}
+	})
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if Alive(cmd.Process.Pid) {
+		if Alive(pid) {
 			time.Sleep(50 * time.Millisecond)
-			return cmd, cleanup
+			return cmd
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	cleanup()
 	t.Fatal("process did not start")
-	return nil, nil
+	return nil
+}
+
+func startLongRunning(t *testing.T) *exec.Cmd {
+	t.Helper()
+	spec := longRunningSpec()
+	return startSpec(t, &spec)
 }
 
 func longRunningSpec() Spec {
@@ -48,4 +53,11 @@ func exitSpec(code int) Spec {
 		return Spec{Shell: "true"}
 	}
 	return Spec{Shell: "exit " + strconv.Itoa(code)}
+}
+
+func waitUntilNotAlive(t *testing.T, pid int, timeout time.Duration) {
+	t.Helper()
+	if !WaitNotAlive(pid, timeout) {
+		t.Fatalf("pid %d still alive after %s", pid, timeout)
+	}
 }

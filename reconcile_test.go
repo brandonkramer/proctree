@@ -15,8 +15,7 @@ func TestReconcileNotRunning(t *testing.T) {
 }
 
 func TestReconcileUnverifiedLeavesProcessAlive(t *testing.T) {
-	cmd, cleanup := startLongRunning(t)
-	defer cleanup()
+	cmd := startLongRunning(t)
 	own := Ownership{
 		Spec:      Spec{Shell: "echo not-this-process"},
 		StartedAt: time.Now(),
@@ -32,10 +31,7 @@ func TestReconcileUnverifiedLeavesProcessAlive(t *testing.T) {
 
 func TestReconcileKillsVerifiedProcess(t *testing.T) {
 	spec := longRunningSpec()
-	cmd := NewCommand(&spec)
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
+	cmd := startSpec(t, &spec)
 	own := Ownership{Spec: spec, StartedAt: time.Now().Add(-time.Second)}
 	time.Sleep(100 * time.Millisecond)
 
@@ -43,9 +39,7 @@ func TestReconcileKillsVerifiedProcess(t *testing.T) {
 	if got.Outcome != ReconcileKilled {
 		t.Fatalf("outcome=%v", got.Outcome)
 	}
-	if !WaitNotAlive(cmd.Process.Pid, 2*time.Second) {
-		t.Fatal("expected process to be dead after reconcile kill")
-	}
+	waitUntilNotAlive(t, cmd.Process.Pid, 2*time.Second)
 }
 
 func TestReconcileZeroPID(t *testing.T) {
@@ -56,8 +50,7 @@ func TestReconcileZeroPID(t *testing.T) {
 }
 
 func TestReconcileUnverifiedNilOwnership(t *testing.T) {
-	cmd, cleanup := startLongRunning(t)
-	defer cleanup()
+	cmd := startLongRunning(t)
 	got := ReconcilePID(cmd.Process.Pid, nil)
 	if got.Outcome != ReconcileUnverified {
 		t.Fatalf("outcome=%v", got.Outcome)

@@ -7,12 +7,7 @@ import (
 )
 
 func TestInspectRunningProcess(t *testing.T) {
-	spec := Spec{Shell: "sleep 300"}
-	cmd := NewCommand(&spec)
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = KillTreeByPID(cmd.Process.Pid) }()
+	cmd := startLongRunning(t)
 	time.Sleep(200 * time.Millisecond)
 
 	info, err := Inspect(cmd.Process.Pid)
@@ -31,34 +26,31 @@ func TestInspectRunningProcess(t *testing.T) {
 }
 
 func TestVerifyOwnershipWithCreateTime(t *testing.T) {
-	spec := Spec{Shell: "sleep 300"}
+	spec := longRunningSpec()
 	started := time.Now()
-	cmd := NewCommand(&spec)
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = KillTreeByPID(cmd.Process.Pid) }()
+	cmd := startSpec(t, &spec)
 	time.Sleep(200 * time.Millisecond)
 
-	own := Ownership{Spec: spec, StartedAt: started}
-	if !VerifyOwnership(cmd.Process.Pid, &own) {
-		t.Fatal("expected ownership match")
-	}
-	own.StartedAt = started.Add(-time.Hour)
-	if VerifyOwnership(cmd.Process.Pid, &own) {
-		t.Fatal("expected stale start rejection")
-	}
+	t.Run("match", func(t *testing.T) {
+		own := Ownership{Spec: spec, StartedAt: started}
+		if !VerifyOwnership(cmd.Process.Pid, &own) {
+			t.Fatal("expected ownership match")
+		}
+	})
+	t.Run("stale start", func(t *testing.T) {
+		own := Ownership{Spec: spec, StartedAt: started.Add(-time.Hour)}
+		if VerifyOwnership(cmd.Process.Pid, &own) {
+			t.Fatal("expected stale start rejection")
+		}
+	})
 }
 
 func TestChildrenAndDescendants(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("unix-oriented children test")
 	}
-	cmd := NewCommand(&Spec{Shell: "sleep 300 & sleep 300 & wait"})
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = KillTreeByPID(cmd.Process.Pid) }()
+	childSpec := Spec{Shell: "sleep 300 & sleep 300 & wait"}
+	cmd := startSpec(t, &childSpec)
 	time.Sleep(300 * time.Millisecond)
 
 	kids, err := Children(cmd.Process.Pid)

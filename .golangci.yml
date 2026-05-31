@@ -84,9 +84,9 @@ formatters:
       sections:
         - standard
         - default
-        - prefix(github.com/brandon-kramer/proctree)
+        - prefix(github.com/brandonkramer/proctree)
     gofumpt:
-      module-path: github.com/brandon-kramer/proctree
+      module-path: github.com/brandonkramer/proctree
       extra-rules: true
   exclusions:
     generated: lax

@@ -2,14 +2,10 @@
 
 Cross-platform Go helpers for running shell and exec commands in an isolated process group or tree, streaming stdout/stderr, killing the full child tree on context cancellation or timeout, and inspecting process state.
 
-```bash
-go get github.com/brandon-kramer/proctree@v0.1.0
-```
-
 ## Install
 
 ```bash
-go get github.com/brandon-kramer/proctree
+go get github.com/brandonkramer/proctree
 ```
 
 ## Quick start
@@ -128,18 +124,18 @@ proctree.VerifyOwned(pid, spec)
 
 | Platform | Process isolation | Tree kill | Alive | Inspect sources | Ownership verify |
 |----------|-------------------|-----------|-------|-----------------|------------------|
-| Linux    | `Setpgid`         | `SIGKILL` to `-pid` | `kill(0)` | `/proc` | cmdline + pgid + create time |
-| macOS    | `Setpgid`         | `SIGKILL` to `-pid` and `pid` | `ps` stat (skip zombies) | `ps` | cmdline + pgid + create time |
-| Windows  | new process group + Job Object | Job terminate (fallback: descendant walk) | `OpenProcess` | Toolhelp + NT APIs | cmdline + create time |
+| Linux    | `Setpgid` | `SIGKILL` to `-pid` | `/proc` stat (skip zombies) | `/proc` | cmdline + pgid + create time |
+| macOS    | `Setpgid` | `SIGKILL` to `-pid` and `pid` | sysctl stat (skip zombies) | sysctl (`KinfoProc`, procargs2) | cmdline + pgid + create time |
+| Windows  | process group + Job Object | `TerminateJobObject` (fallback: descendant walk) | `OpenProcess` | Toolhelp + NT APIs | cmdline + create time |
 
 ### Windows notes
 
+- `Run` assigns each child to a kill-on-close Job Object when the OS allows it.
 - Inspect uses `NtQueryInformationProcess`, `GetProcessTimes`, and `GetProcessMemoryInfo` (no `wmic`).
-- Job Objects are **not** used for tree cleanup yet; see non-goals below.
 
 ### Unix zombie processes
 
-On Linux, a defunct (zombie) pid may still answer `kill(pid,0)`. macOS `Alive` filters zombies via `ps` state. Use `VerifyOwnership` before killing stale pids.
+`Alive` consults `/proc` on Linux and sysctl process state on macOS so zombies count as not running. Use `VerifyOwnership` or `ReconcilePID` before killing stale pids.
 
 ## API surface
 
@@ -188,10 +184,6 @@ golangci-lint run ./...
 ## Releases
 
 Tagged semver releases are published from this module:
-
-```bash
-go get github.com/brandon-kramer/proctree@v0.1.0
-```
 
 ## License
 

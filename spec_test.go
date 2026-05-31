@@ -9,20 +9,47 @@ import (
 
 func TestClassifyContext(t *testing.T) {
 	t.Parallel()
-	if canceled, timedOut := classifyContext(context.Background()); canceled || timedOut {
-		t.Fatal("expected no flags for live context")
+	cases := []struct {
+		name         string
+		setup        func() context.Context
+		wantCanceled bool
+		wantTimedOut bool
+	}{
+		{
+			name:         "live context",
+			setup:        context.Background,
+			wantCanceled: false,
+			wantTimedOut: false,
+		},
+		{
+			name: "cancel",
+			setup: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			wantCanceled: true,
+			wantTimedOut: false,
+		},
+		{
+			name: "deadline exceeded",
+			setup: func() context.Context {
+				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+				t.Cleanup(cancel)
+				return ctx
+			},
+			wantCanceled: true,
+			wantTimedOut: true,
+		},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	canceled, timedOut := classifyContext(ctx)
-	if !canceled || timedOut {
-		t.Fatalf("cancel: canceled=%v timedOut=%v", canceled, timedOut)
-	}
-	deadlineCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
-	defer cancel()
-	canceled, timedOut = classifyContext(deadlineCtx)
-	if !canceled || !timedOut {
-		t.Fatalf("deadline: canceled=%v timedOut=%v", canceled, timedOut)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			canceled, timedOut := classifyContext(tc.setup())
+			if canceled != tc.wantCanceled || timedOut != tc.wantTimedOut {
+				t.Fatalf("canceled=%v timedOut=%v", canceled, timedOut)
+			}
+		})
 	}
 }
 

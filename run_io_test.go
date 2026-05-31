@@ -34,27 +34,30 @@ func TestVerifyOwnershipCustomMatcher(t *testing.T) {
 	}
 	spec := Spec{Shell: "sleep 300"}
 	started := time.Now()
-	cmd := NewCommand(&spec)
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = KillTreeByPID(cmd.Process.Pid) }()
+	cmd := startSpec(t, &spec)
 	time.Sleep(200 * time.Millisecond)
 
-	own := Ownership{
-		StartedAt: started,
-		Match: func(parts []string) bool {
-			joined := strings.Join(parts, " ")
-			return strings.Contains(joined, "sleep")
-		},
-	}
-	if !VerifyOwnership(cmd.Process.Pid, &own) {
-		t.Fatal("expected custom matcher to match")
-	}
-	own.Match = func([]string) bool { return false }
-	if VerifyOwnership(cmd.Process.Pid, &own) {
-		t.Fatal("expected custom matcher rejection")
-	}
+	t.Run("match", func(t *testing.T) {
+		own := Ownership{
+			StartedAt: started,
+			Match: func(parts []string) bool {
+				joined := strings.Join(parts, " ")
+				return strings.Contains(joined, "sleep")
+			},
+		}
+		if !VerifyOwnership(cmd.Process.Pid, &own) {
+			t.Fatal("expected custom matcher to match")
+		}
+	})
+	t.Run("reject", func(t *testing.T) {
+		own := Ownership{
+			StartedAt: started,
+			Match:     func([]string) bool { return false },
+		}
+		if VerifyOwnership(cmd.Process.Pid, &own) {
+			t.Fatal("expected custom matcher rejection")
+		}
+	})
 }
 
 func TestVerifyOwnershipOptsMatcherOverride(t *testing.T) {
@@ -62,11 +65,7 @@ func TestVerifyOwnershipOptsMatcherOverride(t *testing.T) {
 		t.Skip("unix sleep verify")
 	}
 	spec := Spec{Shell: "sleep 300"}
-	cmd := NewCommand(&spec)
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = KillTreeByPID(cmd.Process.Pid) }()
+	cmd := startSpec(t, &spec)
 	time.Sleep(200 * time.Millisecond)
 
 	own := Ownership{Spec: spec}

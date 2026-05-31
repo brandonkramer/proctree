@@ -21,22 +21,24 @@ func TestTeeLineWritesAndCallbacks(t *testing.T) {
 }
 
 func TestTeeOptionsSeparateStreams(t *testing.T) {
-	var out bytes.Buffer
-	var errBuf bytes.Buffer
-	var stdoutLines, stderrLines []string
-	opts := TeeOptions(&out, &errBuf,
-		func(line string) { stdoutLines = append(stdoutLines, line) },
-		func(line string) { stderrLines = append(stderrLines, line) },
-	)
-	opts.OnStdout("a")
-	opts.OnStderr("b")
-	if out.String() != "a\n" {
-		t.Fatalf("stdout=%q", out.String())
-	}
-	if errBuf.String() != "b\n" {
-		t.Fatalf("stderr=%q", errBuf.String())
-	}
-	if len(stdoutLines) != 1 || len(stderrLines) != 1 {
-		t.Fatalf("stdout=%v stderr=%v", stdoutLines, stderrLines)
-	}
+	t.Run("stdout", func(t *testing.T) {
+		var out bytes.Buffer
+		var errBuf bytes.Buffer
+		var stdoutLines, stderrLines []string
+		opts := TeeOptions(&out, &errBuf,
+			func(line string) { stdoutLines = append(stdoutLines, line) },
+			func(line string) { stderrLines = append(stderrLines, line) },
+		)
+		opts.OnStdout("a")
+		opts.OnStderr("b")
+		if out.String() != "a\n" {
+			t.Fatalf("stdout=%q", out.String())
+		}
+		if errBuf.String() != "b\n" {
+			t.Fatalf("stderr=%q", errBuf.String())
+		}
+		if len(stdoutLines) != 1 || len(stderrLines) != 1 {
+			t.Fatalf("stdout=%v stderr=%v", stdoutLines, stderrLines)
+		}
+	})
 }

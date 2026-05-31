@@ -28,8 +28,8 @@ func TestRunAttachesWindowsJob(t *testing.T) {
 	if pid <= 0 {
 		t.Fatal("missing pid")
 	}
+	t.Cleanup(func() { _ = KillTreeByPID(pid) })
 	if _, ok := pidJobs.Load(pid); !ok {
 		t.Fatal("expected windows job to be tracked for run pid")
 	}
-	_ = KillTreeByPID(pid)
 }

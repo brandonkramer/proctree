@@ -27,25 +27,16 @@ func TestWindowsRunEcho(t *testing.T) {
 }
 
 func TestWindowsKillTreeByPID(t *testing.T) {
-	cmd, cleanup := startLongRunning(t)
-	defer cleanup()
+	cmd := startLongRunning(t)
 	pid := cmd.Process.Pid
 	if err := KillTreeByPID(pid); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		if !Alive(pid) {
-			return
-		}
-		time.Sleep(25 * time.Millisecond)
-	}
-	t.Fatalf("pid %d still alive after kill", pid)
+	waitUntilNotAlive(t, pid, 3*time.Second)
 }
 
 func TestWindowsInspectProcess(t *testing.T) {
-	cmd, cleanup := startLongRunning(t)
-	defer cleanup()
+	cmd := startLongRunning(t)
 
 	info, err := Inspect(cmd.Process.Pid)
 	if err != nil {
@@ -64,11 +55,7 @@ func TestWindowsInspectProcess(t *testing.T) {
 
 func TestWindowsVerifyOwned(t *testing.T) {
 	spec := longRunningSpec()
-	cmd := NewCommand(&spec)
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = KillTreeByPID(cmd.Process.Pid) }()
+	cmd := startSpec(t, &spec)
 	time.Sleep(200 * time.Millisecond)
 	if !VerifyOwned(cmd.Process.Pid, &spec) {
 		t.Fatal("expected ownership match")
@@ -77,7 +64,7 @@ func TestWindowsVerifyOwned(t *testing.T) {
 
 func TestWindowsRunTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
+	t.Cleanup(cancel)
 	spec := longRunningSpec()
 	res, err := Run(ctx, &spec, nil)
 	if err == nil {
@@ -90,6 +77,7 @@ func TestWindowsRunTimeout(t *testing.T) {
 
 func TestWindowsRunCancelKillsProcess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	spec := longRunningSpec()
 	pidCh := make(chan int, 1)
 	done := make(chan struct{})
@@ -111,19 +99,11 @@ func TestWindowsRunCancelKillsProcess(t *testing.T) {
 		_ = KillTreeByPID(pid)
 		t.Fatal("run did not finish after cancel")
 	}
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		if !Alive(pid) {
-			return
-		}
-		time.Sleep(25 * time.Millisecond)
-	}
-	t.Fatalf("pid %d still alive after cancel", pid)
+	waitUntilNotAlive(t, pid, 3*time.Second)
 }
 
 func TestWindowsInspectTree(t *testing.T) {
-	cmd, cleanup := startLongRunning(t)
-	defer cleanup()
+	cmd := startLongRunning(t)
 	tree, err := InspectTree(cmd.Process.Pid)
 	if err != nil {
 		t.Fatal(err)
