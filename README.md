@@ -165,16 +165,6 @@ proctree.VerifyOwned(pid, spec)
 - `Children(pid)` / `Descendants(root)` — process tree discovery
 - `Cmdline(pid)` / `CreateTime(pid)` — convenience accessors
 
-## Non-goals
-
-proctree targets **supervised process trees**, not general command ergonomics. Out of scope for now:
-
-- **PTY / TTY allocation** — use a dedicated PTY library or run interactively outside proctree
-- **Shell pipelines** (`cmd | cmd`) — compose with `os/exec` pipes or a pipeline helper; proctree runs one root command tree
-- **Built-in retry/backoff** — callers own policy on top of `Run`
-- **Log rotation / persistence** — use `Options.Stdout`/`Stderr` writers or callbacks
-- **Container/cgroup isolation** — run inside your orchestrator; proctree supervises the root pid you give it
-
 ## Development
 
 Run the same checks as CI before pushing:
