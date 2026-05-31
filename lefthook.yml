@@ -1,0 +1,6 @@
+# https://github.com/evilmartians/lefthook
+pre-push:
+  commands:
+    check:
+      run: ./scripts/check.sh
+      skip: false
