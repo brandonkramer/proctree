@@ -175,11 +175,19 @@ proctree targets **supervised process trees**, not general command ergonomics. O
 
 ## Development
 
+Run the same checks as CI before pushing:
+
 ```bash
-go mod tidy
-go test -race ./...
-golangci-lint run ./...
+./scripts/check.sh
 ```
+
+Optional pre-push hook (once per clone):
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`scripts/check.sh` runs `go test -race`, a Linux cross-compile check, and `golangci-lint` installed with your local Go toolchain (must be >= `go.mod`). CI pins `GOLANGCI_LINT_VERSION` in `.github/workflows/test.yml`.
 
 ## Releases
 
