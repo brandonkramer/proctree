@@ -148,12 +148,20 @@ func shellPayloadFromParts(parts []string) string {
 
 func shellPayloadFromCommandLine(line string) string {
 	lower := strings.ToLower(line)
-	idx := strings.Index(lower, " /c ")
-	if idx < 0 {
+	i := strings.Index(lower, "/c")
+	if i < 0 {
 		return ""
 	}
-	payload := strings.TrimSpace(line[idx+4:])
-	return strings.Trim(payload, `"`)
+	payload := strings.TrimSpace(line[i+2:])
+	payload = strings.Trim(payload, `"`)
+	return normalizeWindowsShellPayload(payload)
+}
+
+func normalizeWindowsShellPayload(payload string) string {
+	payload = strings.TrimSpace(payload)
+	payload = strings.ReplaceAll(payload, "1>NUL", ">nul")
+	payload = strings.ReplaceAll(payload, "1>nul", ">nul")
+	return payload
 }
 
 func openProcessQuery(pid uint32) (windows.Handle, error) {

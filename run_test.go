@@ -197,7 +197,7 @@ func TestKillTreeNoProcess(t *testing.T) {
 }
 
 func TestVerifyOwnedShellRun(t *testing.T) {
-	spec := Spec{Shell: "sleep 300"}
+	spec := longRunningSpec()
 	cmd := startSpec(t, &spec)
 	time.Sleep(200 * time.Millisecond)
 	if !VerifyOwned(cmd.Process.Pid, &spec) {

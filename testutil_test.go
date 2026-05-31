@@ -40,7 +40,7 @@ func startLongRunning(t *testing.T) *exec.Cmd {
 
 func longRunningSpec() Spec {
 	if runtime.GOOS == "windows" {
-		return Spec{Shell: "ping -n 600 127.0.0.1 >nul"}
+		return Spec{Shell: "ping -n 600 127.0.0.1"}
 	}
 	return Spec{Shell: "sleep 300"}
 }

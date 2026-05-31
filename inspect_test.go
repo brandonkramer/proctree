@@ -164,18 +164,21 @@ func TestChildrenAndDescendantsInvalidPID(t *testing.T) {
 
 func TestVerifyOwnershipWithCreateTime(t *testing.T) {
 	spec := longRunningSpec()
-	started := time.Now()
 	cmd := startSpec(t, &spec)
 	time.Sleep(200 * time.Millisecond)
+	created, err := CreateTime(cmd.Process.Pid)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Run("match", func(t *testing.T) {
-		own := Ownership{Spec: spec, StartedAt: started}
+		own := Ownership{Spec: spec, StartedAt: created}
 		if !VerifyOwnership(cmd.Process.Pid, &own) {
 			t.Fatal("expected ownership match")
 		}
 	})
 	t.Run("stale start", func(t *testing.T) {
-		own := Ownership{Spec: spec, StartedAt: started.Add(-time.Hour)}
+		own := Ownership{Spec: spec, StartedAt: created.Add(-time.Hour)}
 		if VerifyOwnership(cmd.Process.Pid, &own) {
 			t.Fatal("expected stale start rejection")
 		}

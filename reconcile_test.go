@@ -32,8 +32,12 @@ func TestReconcileUnverifiedLeavesProcessAlive(t *testing.T) {
 func TestReconcileKillsVerifiedProcess(t *testing.T) {
 	spec := longRunningSpec()
 	cmd := startSpec(t, &spec)
-	own := Ownership{Spec: spec, StartedAt: time.Now().Add(-time.Second)}
 	time.Sleep(100 * time.Millisecond)
+	created, err := CreateTime(cmd.Process.Pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	own := Ownership{Spec: spec, StartedAt: created}
 
 	got := ReconcilePID(cmd.Process.Pid, &own)
 	if got.Outcome != ReconcileKilled {
