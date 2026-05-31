@@ -4,16 +4,16 @@ Cross-platform Go helpers for running shell and exec commands in an isolated pro
 
 ## Install
 
+From [pkg.go.dev](https://pkg.go.dev/github.com/brandonkramer/proctree):
+
 ```bash
-go get github.com/brandonkramer/proctree@v0.1.2
+go get github.com/brandonkramer/proctree
 ```
 
-Documentation and versions: [pkg.go.dev/github.com/brandonkramer/proctree](https://pkg.go.dev/github.com/brandonkramer/proctree)
-
-For the latest release, omit the version or use `@latest`:
+Pin a release if you want a specific version:
 
 ```bash
-go get github.com/brandonkramer/proctree@latest
+go get github.com/brandonkramer/proctree@v0.1.2
 ```
 
 ## Quick start
