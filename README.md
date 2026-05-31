@@ -5,7 +5,15 @@ Cross-platform Go helpers for running shell and exec commands in an isolated pro
 ## Install
 
 ```bash
-go get github.com/brandonkramer/proctree
+go get github.com/brandonkramer/proctree@v0.1.2
+```
+
+Documentation and versions: [pkg.go.dev/github.com/brandonkramer/proctree](https://pkg.go.dev/github.com/brandonkramer/proctree)
+
+For the latest release, omit the version or use `@latest`:
+
+```bash
+go get github.com/brandonkramer/proctree@latest
 ```
 
 ## Quick start
@@ -193,7 +201,7 @@ Git hooks via [lefthook](https://github.com/evilmartians/lefthook) (once per clo
 
 ## Releases
 
-Tagged semver releases are published from this module:
+Tagged semver releases are published to [pkg.go.dev](https://pkg.go.dev/github.com/brandonkramer/proctree). See [GitHub releases](https://github.com/brandonkramer/proctree/releases) for notes.
 
 ## License
 
